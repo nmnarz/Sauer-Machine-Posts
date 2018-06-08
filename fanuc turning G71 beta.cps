@@ -21,7 +21,7 @@ extension = "nc";
 programNameIsInteger = true;
 setCodePage("ascii");
 
-capabilities = CAPABILITY_TURNING;
+capabilities = CAPABILITY_MILLING | CAPABILITY_TURNING;
 tolerance = spatial(0.002, MM);
 
 minimumChordLength = spatial(0.01, MM);
