@@ -10,7 +10,7 @@
   FORKID {14D60AD3-4366-49dc-939C-4DB5EA48FF68}
 */
 
-description = "HAAS ST-10";
+description = "YOUJI Fanuc Oi-MD";
 
 var gotYAxis = false;
 var yAxisMinimum = toPreciseUnit(gotYAxis ? -50.8 : 0, MM); // specifies the minimum range for the Y-axis
@@ -24,7 +24,7 @@ var gotDoorControl = false;
 
 // >>>>> INCLUDED FROM ../common/haas lathe.cps
 if (!description) {
-  description = "HAAS Lathe";
+  description = "YOUJI LATHE WITH LIVE TOOLING";
 }
 vendor = "Haas Automation";
 vendorUrl = "https://www.haascnc.com";
@@ -56,8 +56,8 @@ highFeedrate = (unit == IN) ? 470 : 12000;
 
 // user-defined properties
 properties = {
-  writeMachine: false, // write machine
-  writeTools: false, // writes the tools
+  writeMachine: true, // write machine
+  writeTools: true, // writes the tools
   writeVersion: false, // include version info
   // preloadTool: false, // preloads next tool on tool change if any
   showSequenceNumbers: false, // show sequence numbers
@@ -68,17 +68,17 @@ properties = {
   useRadius: false, // specifies that arcs should be output using the radius (R word) instead of the I, J, and K words.
   maximumSpindleSpeed: 2400, // specifies the maximum spindle speed
   useParametricFeed: false, // specifies that feed should be output using Q values
-  showNotes: false, // specifies that operation notes should be output.
+  showNotes: true, // specifies that operation notes should be output.
   useCycles: true, // specifies that drilling cycles should be used.
   g53HomePositionX: 0, // home position for X-axis
   g53HomePositionY: 0, // home position for Y-axis
   g53HomePositionZ: 0, // home position for Z-axis
   g53HomePositionSubZ: 0, // home Position for Z when the operation uses the Secondary Spindle
   useTailStock: false, // specifies to use the tailstock or not
-  useBarFeeder: false, // specifies to use the bar feeder
+  //useBarFeeder: false, // specifies to use the bar feeder
   gotChipConveyor: false, // specifies to use a chip conveyor Y/N
-  useG112: false, // specifies if the machine has XY polar interpolation (G112) capabilities
-  useG61: false, // exact stop mode
+  useG112: true, // specifies if the machine has XY polar interpolation (G112) capabilities
+  //useG61: false, // exact stop mode
   // useM97: false,
   setting102: 1.0, // diameter used by control to calculate feed rates (INCH value)
   rapidRewinds: false, // rewinds the C axis using G0
