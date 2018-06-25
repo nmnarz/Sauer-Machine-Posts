@@ -10,7 +10,7 @@
   FORKID {88B77760-269E-4d46-8588-30814E7FE9A1}
 */
 
-description = "Mitsubishi Turning";
+description = "DMG MORI NLX 4000B/750";
 vendor = "Mitsubishi";
 vendorUrl = "http://www.mitsubishielectric.com/fa/products/cnt/cnc";
 legal = "Copyright (C) 2012-2018 by Autodesk, Inc.";
@@ -42,13 +42,13 @@ properties = {
   /*preloadTool: false,*/ // preloads next tool on tool change if any
   showSequenceNumbers: true, // show sequence numbers
   sequenceNumberStart: 10, // first sequence number
-  sequenceNumberIncrement: 1, // increment for sequence numbers
+  sequenceNumberIncrement: 10, // increment for sequence numbers
   optionalStop: true, // optional stop
-  o8: true, // specifies 8-digit program number
+  o8: false, // specifies 8-digit program number
   separateWordsWithSpace: true, // specifies that the words should be separated with a white space
   useRadius: false, // specifies that arcs should be output using the radius (R word) instead of the I, J, and K words.
-  maximumSpindleSpeed: 6000, // specifies the maximum spindle speed
-  type: "3", // specifies the G-code list type 2 - 7
+  maximumSpindleSpeed: 1500, // specifies the maximum spindle speed
+  type: "2", // specifies the G-code list type 2 - 7
   useParametricFeed: false, // specifies that feed should be output using Q values
   showNotes: false, // specifies that operation notes should be output.
   g53HomePositionX: 0, // home position for X-axis
@@ -103,6 +103,7 @@ var rpmFormat = createFormat({decimals:0});
 var secFormat = createFormat({decimals:3, forceDecimal:true}); // seconds - range 0.001-99999.999
 var milliFormat = createFormat({decimals:0}); // milliseconds // range 1-9999
 var taperFormat = createFormat({decimals:1, scale:DEG});
+var qFormat = createFormat({decimals:0, scale:1000}); 
 
 var xOutput = createVariable({prefix:"X"}, xFormat);
 var yOutput = createVariable({prefix:"Y"}, yFormat);
@@ -110,6 +111,7 @@ var zOutput = createVariable({prefix:"Z"}, zFormat);
 var feedOutput = createVariable({prefix:"F"}, feedFormat);
 var pitchOutput = createVariable({prefix:"F", force:true}, pitchFormat);
 var sOutput = createVariable({prefix:"S", force:true}, rpmFormat);
+var peckOutput = createVariable({prefix:"Q", force:true}, qFormat);
 
 // circular output
 var kOutput = createReferenceVariable({prefix:"K"}, xFormat);
@@ -125,11 +127,12 @@ var gSpindleModeModal = createModal({}, gFormat); // modal group 5 // G96-97
 var gUnitModal = createModal({}, gFormat); // modal group 6 // G20-21
 var gCycleModal = createModal({}, gFormat); // modal group 9 // G81, ...
 var gRetractModal = createModal({}, gFormat); // modal group 10 // G98-99
+var tailStockModal = createModal({}, mFormat);
 
 // fixed settings
 var firstFeedParameter = 500;
 var gotSecondarySpindle = true;
-var gotTailStock = false;
+var gotTailStock = true;
 
 var WARNING_WORK_OFFSET = 0;
 
@@ -152,14 +155,20 @@ var previousToolingData;
 
 function getCode(code) {
   switch(code) {
-  case "PART_CATCHER_ON":
-    return mFormat.format(10);
-  case "PART_CATCHER_OFF":
-    return mFormat.format(11);
-  // case "TAILSTOCK_ON":
-    // return mFormat.format(SPECIFY YOUR CODE HERE);
-  // case "TAILSTOCK_OFF":
-    // return mFormat.format(SPECIFY YOUR CODE HERE);
+  // case "PART_CATCHER_ON":
+    // return mFormat.format(10);
+  // case "PART_CATCHER_OFF":
+    // return mFormat.format(11);
+   case "TAILSTOCK_ON":
+     //onCommand(COMMAND_STOP_SPINDLE);
+     writeBlock(tailStockModal.format(25));
+     //onDwell(5.0);
+     return;
+   case "TAILSTOCK_OFF":
+     //onCommand(COMMAND_STOP_SPINDLE);
+     writeBlock(tailStockModal.format(26));
+     //onDwell(5.0);
+     return;
   // case "ENGAGE_C_AXIS":
     // machineState.cAxisIsEngaged = true;
     // return cAxisEngageModal.format(UNSUPPORTED);
@@ -741,8 +750,8 @@ function onSection() {
     if (!isFirstSection() && insertToolCall) {
       onCommand(COMMAND_COOLANT_OFF);
     }
-    writeBlock(gFormat.format(28), "U" + xFormat.format(0)); // retract
-    writeBlock(gFormat.format(28), "W" + zFormat.format(0)); // retract
+    writeBlock(gFormat.format(53), gMotionModal.format(0), "X" + xFormat.format(0)); // retract
+    writeBlock(gFormat.format(53), gMotionModal.format(0), "Z" + zFormat.format(0)); // retract
     forceXYZ();
   }
 
@@ -864,9 +873,24 @@ function onSection() {
   } else {
     writeBlock(getCode("FEED_MODE_UNIT_MIN"));
   }
-
-  if (gotTailStock) {
+  
+  /*if (gotTailStock) {
     writeBlock(getCode(currentSection.tailstock ? "TAILSTOCK_ON" : "TAILSTOCK_OFF"));
+  }
+*/
+
+  if (gotTailStock && currentSection.tailstock == true) {
+    onCommand(COMMAND_STOP_SPINDLE);
+    writeBlock(getCode(currentSection.tailstock ? "TAILSTOCK_ON" : "TAILSTOCK_OFF"));
+    onDwell(5.0);
+  } else if (isFirstSection()) {
+    return;
+  } else if (!isFirstSection()) {
+      if (getPreviousSection().tailstock = true) {
+        onCommand(COMMAND_STOP_SPINDLE);
+        //writeBlock(getCode(currentSection.tailstock ? "TAILSTOCK_ON" : "TAILSTOCK_OFF"));
+        onDwell(5.0);
+      }
   }
   // writeBlock(mFormat.format(clampPrimaryChuck ? x : x));
   // writeBlock(mFormat.format(clampSecondaryChuck ? x : x));
@@ -911,9 +935,8 @@ function onSection() {
     gMotionModal.reset();
     
     if (activeGCodeList == 2) {
-      writeBlock(
-        gMotionModal.format(0), xOutput.format(initialPosition.x), yOutput.format(initialPosition.y), zOutput.format(initialPosition.z)
-      );
+      writeBlock(gMotionModal.format(0), zOutput.format(initialPosition.z));
+      writeBlock(gMotionModal.format(0), xOutput.format(initialPosition.x));
     } else {
       writeBlock(
         gAbsIncModal.format(90),
@@ -1155,12 +1178,12 @@ function onCyclePoint(x, y, z) {
     // return to initial Z which is clearance plane and set absolute mode
 
     var F = cycle.feedrate;
-    var P = (cycle.dwell == 0) ? 0 : clamp(1, cycle.dwell * 1000, 99999999); // in milliseconds
+    var P = !cycle.dwell ? 0 : clamp(1, cycle.dwell * 1000, 99999999); // in milliseconds
 
     switch (cycleType) {
     case "drilling":
       writeBlock(
-        (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(81),
+        (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(83),
         getCommonCycle(x, y, z, cycle.retract),
         feedOutput.format(F)
       );
@@ -1168,14 +1191,14 @@ function onCyclePoint(x, y, z) {
     case "counter-boring":
       if (P > 0) {
         writeBlock(
-          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(82),
+          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(83),
           getCommonCycle(x, y, z, cycle.retract),
           "P" + milliFormat.format(P),
           feedOutput.format(F)
         );
       } else {
         writeBlock(
-          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(81),
+          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(83),
           getCommonCycle(x, y, z, cycle.retract),
           feedOutput.format(F)
         );
@@ -1187,9 +1210,9 @@ function onCyclePoint(x, y, z) {
         expandCyclePoint(x, y, z);
       } else {
         writeBlock(
-          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(73),
+          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(83),
           getCommonCycle(x, y, z, cycle.retract),
-          "Q" + spatialFormat.format(cycle.incrementalDepth),
+          peckOutput.format(cycle.incrementalDepth),
           feedOutput.format(F)
         );
       }
@@ -1201,8 +1224,8 @@ function onCyclePoint(x, y, z) {
         writeBlock(
           (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(83),
           getCommonCycle(x, y, z, cycle.retract),
-          "Q" + spatialFormat.format(cycle.incrementalDepth),
-          // conditional(P > 0, "P" + milliFormat.format(P)),
+          peckOutput.format(cycle.incrementalDepth),
+          conditional(P > 0, "P" + milliFormat.format(P)),
           feedOutput.format(F)
         );
       }
@@ -1210,10 +1233,10 @@ function onCyclePoint(x, y, z) {
     case "tapping":
       F = tool.getThreadPitch() * rpmFormat.getResultingValue(tool.spindleRPM);
       if (properties.useRigidTapping != "no") {
-        writeBlock(mFormat.format(29), sOutput.format(tool.spindleRPM));
+        writeBlock(mFormat.format(329), sOutput.format(tool.spindleRPM));
       }
       writeBlock(
-        (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format((tool.type == TOOL_TAP_LEFT_HAND) ? 74 : 84),
+        (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format((tool.type == TOOL_TAP_LEFT_HAND) ? 84.1 : 84),
         getCommonCycle(x, y, z, cycle.retract),
         "P" + milliFormat.format(P),
         feedOutput.format(F)
@@ -1222,10 +1245,10 @@ function onCyclePoint(x, y, z) {
     case "left-tapping":
       F = tool.getThreadPitch() * rpmFormat.getResultingValue(tool.spindleRPM);
       if (properties.useRigidTapping != "no") {
-        writeBlock(mFormat.format(29), sOutput.format(tool.spindleRPM));
+        writeBlock(mFormat.format(329), sOutput.format(tool.spindleRPM));
       }
       writeBlock(
-        (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(74),
+        (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(84.1),
         getCommonCycle(x, y, z, cycle.retract),
         "P" + milliFormat.format(P),
         feedOutput.format(F)
@@ -1234,7 +1257,7 @@ function onCyclePoint(x, y, z) {
     case "right-tapping":
       F = tool.getThreadPitch() * rpmFormat.getResultingValue(tool.spindleRPM);
       if (properties.useRigidTapping != "no") {
-        writeBlock(mFormat.format(29), sOutput.format(tool.spindleRPM));
+        writeBlock(mFormat.format(329), sOutput.format(tool.spindleRPM));
       }
       writeBlock(
         (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(84),
@@ -1246,17 +1269,7 @@ function onCyclePoint(x, y, z) {
     case "tapping-with-chip-breaking":
     case "left-tapping-with-chip-breaking":
     case "right-tapping-with-chip-breaking":
-      F = tool.getThreadPitch() * rpmFormat.getResultingValue(tool.spindleRPM);
-      if (properties.useRigidTapping != "no") {
-        writeBlock(mFormat.format(29), sOutput.format(tool.spindleRPM));
-      }
-      writeBlock(
-        (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format((tool.type == TOOL_TAP_LEFT_HAND ? 74 : 84)),
-        getCommonCycle(x, y, z, cycle.retract),
-        "P" + milliFormat.format(P),
-        "Q" + spatialFormat.format(cycle.incrementalDepth),
-        feedOutput.format(F)
-      );
+      error(localize("Cycle not valid"));
       break;
 /*
     case "fine-boring":
@@ -1272,7 +1285,7 @@ function onCyclePoint(x, y, z) {
     case "reaming":
       if (P > 0) {
         writeBlock(
-          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(89),
+          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(85),
           getCommonCycle(x, y, z, cycle.retract),
           "P" + milliFormat.format(P),
           feedOutput.format(F)
@@ -1301,7 +1314,7 @@ function onCyclePoint(x, y, z) {
     case "boring":
       if (P > 0) {
         writeBlock(
-          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(89),
+          (activeGCodeList == 2) ? "" : gRetractModal.format(98), conditional(activeGCodeList != 2, gAbsIncModal.format(90)), gCycleModal.format(85),
           getCommonCycle(x, y, z, cycle.retract),
           "P" + milliFormat.format(P), // not optional
           feedOutput.format(F)
@@ -1481,8 +1494,8 @@ function engagePartCatcher(engage) {
     writeBlock(getCode("PART_CATCHER_ON"), formatComment(localize("PART CATCHER ON")));
   } else {
     onCommand(COMMAND_COOLANT_OFF);
-    writeBlock(gFormat.format(28), gMotionModal.format(0), "U" + xFormat.format(properties.g53HomePositionX)); // retract
-    writeBlock(gFormat.format(28), gMotionModal.format(0), "W" + zFormat.format(properties.g53HomePositionZ)); // retract
+    writeBlock(gFormat.format(53), gMotionModal.format(0), "X" + xFormat.format(properties.g53HomePositionX)); // retract
+    writeBlock(gFormat.format(53), gMotionModal.format(0), "Y" + zFormat.format(properties.g53HomePositionZ)); // retract
     writeBlock(getCode("PART_CATCHER_OFF"), formatComment(localize("PART CATCHER OFF")));
     forceXYZ();
   }
@@ -1509,8 +1522,8 @@ function onClose() {
 
   forceXYZ();
   if (!machineConfiguration.hasHomePositionX() && !machineConfiguration.hasHomePositionY()) {
-    writeBlock(gFormat.format(28), "U" + xFormat.format(0)); // retract
-    writeBlock(gFormat.format(28), "W" + zFormat.format(0)); // retract
+    writeBlock(gFormat.format(53), gMotionModal.format(0), "X" + xFormat.format(properties.g53HomePositionX)); // retract
+    writeBlock(gFormat.format(53), gMotionModal.format(0), "Z" + xFormat.format(properties.g53HomePositionZ)); // retract
   } else {
     var homeX;
     if (machineConfiguration.hasHomePositionX()) {
